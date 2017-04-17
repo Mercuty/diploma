@@ -1,11 +1,13 @@
-from itertools import count
 from random import randint
 from time import sleep
 
+import numpy as np
 import vk
-from igraph import Graph, summary, plot
+from igraph import Graph, plot
 
 from tok import my_token
+
+researched_id = 13221877
 
 
 def initialisation():
@@ -15,7 +17,7 @@ def initialisation():
 
 
 def get_friends(api, userid):
-    user_friends = api.friends.get(user_ids=userid)
+    user_friends = api.friends.get(user_id=userid)
     return user_friends
 
 
@@ -23,17 +25,19 @@ def friends_clusterising(mutural_list):
     cluster_color = []
     friends_color = []
     mutural_list_col = len(mutural_list)
+    print(mutural_list_col)
     friends_common = [0] * mutural_list_col
     for l in range(mutural_list_col):
-        friends_common[l] = [0] * 4
+        friends_common[l] = [0] * 5
     i = 0
     for friend in mutural_list:
         friends_common[i][0] = friend
         friends_common[i][1] = len(mutural_list[friend])
         friends_common[i][2] = ''
         friends_common[i][3] = ''
+        friends_common[i][4] = mutural_list[friend]
         i += 1
-    friends_common.sort(key=lambda friends: friends[1], reverse=True)
+    friends_common.sort(key=lambda friends: friends[1])
     cluster_num = 0
     i = 0
     for friend in friends_common:
@@ -44,6 +48,20 @@ def friends_clusterising(mutural_list):
                     if ((friends_common[j][0] == common_friend) & (friends_common[j][2] == '')):
                         friends_common[j][2] = cluster_num
             cluster_num += 1
+    for i in range(500):  # калибруем кластера
+        for friend in friends_common:
+            common_friends_clusters = np.zeros(cluster_num)
+            people_in_cluster = np.zeros(cluster_num)
+            for friends in friends_common:
+                people_in_cluster[friends[2]] += 1
+            for common_friend in friend[4]:
+                for my_friend in friends_common:
+                    if my_friend[0] == common_friend:
+                        common_friends_clusters[my_friend[2]] += 1
+            for iter in range(cluster_num):
+                if people_in_cluster[iter] != 0:
+                    common_friends_clusters[iter] /= people_in_cluster[iter]
+            friend[2] = common_friends_clusters.argmax()
     for cluster in range(cluster_num):
         cluster_color.append(str(randint(0, 255)) + ", " + str(randint(0, 255)) + ", " + str(randint(0, 255)))
     for friend in friends_common:
@@ -53,19 +71,18 @@ def friends_clusterising(mutural_list):
     plot_graf(friends_common, mutural_list, friends_color)
 
 
+# 27012093 53523636
 def plot_graf(friends_common, mutural_list, friends_color):
     ids_in_string = []
-    ids_friends = []
     g = Graph()
     nodes_col = len(friends_common)
     g.add_vertices(nodes_col + 1)
     for friend in friends_common:
         ids_in_string.append(str(friend[0]))
-    ids_in_string.append(str(53523636))
+    ids_in_string.append(str(researched_id))
     g.vs["name"] = ids_in_string
     g.vs["color"] = friends_color
-    user_index = g.vs.find(str(53523636)).index
-    print(user_index)
+    user_index = g.vs.find(str(researched_id)).index
     for friend in mutural_list:
         friend_node = g.vs.find(str(friend))
         g.add_edges([(friend_node.index, user_index)])
@@ -74,42 +91,46 @@ def plot_graf(friends_common, mutural_list, friends_color):
                 common_friend_node = g.vs.find(str(common_friend))
                 connections = g.es.select(_within=(friend_node.index, common_friend_node.index))
                 try:
-                    print(connections[0])
-                    print("connection exists")
+                    a = (connections[0])
+                    # print("connection exists")
                 except:
                     g.add_edges([(friend_node.index, common_friend_node.index)])
-            except:
-                print("error EDGING or already exists")
+            except Exception as e:
+                print(e)
     g.vs["label"] = g.vs["name"]
+    print(len(ids_in_string))
     layout = g.layout("kk")
-    plot(g, layout=layout, margin=5)
+    plot(g, "social_network.png")
+    # plot(g, layout=layout, margin=10)
 
 
 def main():
     api = initialisation()
-    my_friends = get_friends(api, 53523636)
+    my_friends = get_friends(api, researched_id)
+    print(my_friends["count"])
     couples_of_friends = int(my_friends["count"] / 20)
     my_friends = my_friends["items"]
     print(couples_of_friends)
     mutural_list = {}
-    for i in range(couples_of_friends):
+    for i in range(couples_of_friends + 1):
         sleep(0.25)
         slice = my_friends[i * 20:(i + 1) * 20]
         try:
-            mutural = api.friends.getMutual(target_uids=slice)
+            mutural = api.friends.getMutual(source_uid=researched_id, target_uids=slice)
             print("ok " + str(i))
+            for friend in mutural:
+                mutural_list[friend["id"]] = friend["common_friends"]
         except:
-            print("error API")
-            # for k in range(20):
-            #     try:
-            #         sleep(0.25)
-            #         mutural = api.friends.getMutual(target_uids=slice[k])
-            #     except:
-            #         print("error" + " " + str(slice[k]))
-        for friend in mutural:
-            mutural_list[friend["id"]] = friend["common_friends"]
+            print("error API " + str(i))
+            for k in range(len(slice)):
+                try:
+                    sleep(0.4)
+                    mutural = api.friends.getMutual(source_uid=researched_id, target_uids=slice[k])
+                    for friend in mutural:
+                        mutural_list[friend["id"]] = friend["common_friends"]
+                except:
+                    print("error " + str(slice[k]))
     friends_clusterising(mutural_list)
-    # plot_graf(mutural_list)
 
 
 main()
