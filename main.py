@@ -7,7 +7,9 @@ from igraph import Graph, plot
 
 from tok import my_token
 
+# researched_id = 22846933
 researched_id = 53523636
+# researched_id = 13221877
 
 
 def initialisation():  # инициализация для вк апи
@@ -37,15 +39,15 @@ def friends_clusterising(mutural_list):
         friends_common[i][3] = ''  # цвет кластера
         friends_common[i][4] = mutural_list[friend]  # id общих друзей
         i += 1
-    friends_common.sort(key=lambda friends: friends[1])  # сортируем по возрастанию количества общих друзей
+    friends_common.sort(
+        key=lambda friends_sorter: friends_sorter[1])  # сортируем по возрастанию количества общих друзей
     cluster_num = 0
-    i = 0
     for friend in friends_common:  # первоначальное распределение в кластера
         if friend[2] == '':
             friend[2] = cluster_num
             for common_friend in mutural_list[friend[0]]:
                 for j in range(mutural_list_col):
-                    if ((friends_common[j][0] == common_friend) & (friends_common[j][2] == '')):
+                    if (friends_common[j][0] == common_friend) & (friends_common[j][2] == ''):
                         friends_common[j][2] = cluster_num
             cluster_num += 1
     for i in range(mutural_list_col):  # калибруем кластера
@@ -58,11 +60,11 @@ def friends_clusterising(mutural_list):
                 for my_friend in friends_common:
                     if my_friend[0] == common_friend:
                         common_friends_clusters[my_friend[2]] += 1
-            for iter in range(cluster_num):
-                if people_in_cluster[iter] != 0:
-                    common_friends_clusters[iter] /= people_in_cluster[iter]
+            for iter_num in range(cluster_num):
+                if people_in_cluster[iter_num] != 0:
+                    common_friends_clusters[iter_num] /= people_in_cluster[iter_num]
             friend[2] = common_friends_clusters.argmax()
-    for i in range(10):
+    for i in range(mutural_list_col // 10):  # схлопываем недокластеры
         for cluster in range(cluster_num):
             cluster_col = [0] * cluster_num
             for friend in friends_common:  # считаем количество друзей друга в разных кластерах
@@ -73,11 +75,10 @@ def friends_clusterising(mutural_list):
                                 cluster_col[friend_1[2]] += 1
             for cluster_c in range(cluster_num):
                 if (cluster_col[cluster_c] != 0) & (cluster_col[cluster] != 0) & (cluster != cluster_c):
-                    if cluster_col[cluster_c] / cluster_col[cluster] > 0.5:
-                        for i in range(len(friends_common)):
-                            if friends_common[i][2] == cluster_c:
-                                friends_common[i][2] == 0
-    cluster_color.append("255,255,255")
+                    if cluster_col[cluster_c] / cluster_col[cluster] > 1:
+                        for k in range(len(friends_common)):
+                            if friends_common[k][2] == cluster_c:
+                                friends_common[k][2] = cluster
     for cluster in range(cluster_num):  # присваеваем каждому кластеру рандомный цвет
         cluster_color.append(str(randint(0, 255)) + ", " + str(randint(0, 255)) + ", " + str(randint(0, 255)))
     for friend in friends_common:  # передаем каждому юзеру цвет его кластера
@@ -88,14 +89,30 @@ def friends_clusterising(mutural_list):
 
 
 # 27012093 53523636
+# noinspection PyBroadException
 def plot_graf(friends_common, mutural_list, friends_color):
+    friends_ids = []
+    for friend in friends_common:
+        friends_ids.append(friend[0])
+    api = initialisation()
+    friend_names = api.users.get(user_ids=friends_ids)
+    sleep(0.4)
+    researched_name = api.users.get(user_ids=str(researched_id))[0]["last_name"]
+    print(friend_names)
+
     ids_in_string = []
+    names_in_string = []
     g = Graph()
     nodes_col = len(friends_common)
     g.add_vertices(nodes_col + 1)  # +1 для самого пользователя
+    friend_num = 0
     for friend in friends_common:
+        print(friend_num)
+        names_in_string.append(friend_names[friend_num]["last_name"])
         ids_in_string.append(str(friend[0]))
+        friend_num += 1
     ids_in_string.append(str(researched_id))
+    names_in_string.append(researched_name)
     g.vs["name"] = ids_in_string  # называем вершины графа айдишниками юзеров
     g.vs["color"] = friends_color  # красим вершины в соответствии с кластером юзера
     user_index = g.vs.find(str(researched_id)).index
@@ -113,13 +130,14 @@ def plot_graf(friends_common, mutural_list, friends_color):
                     g.add_edges([(friend_node.index, common_friend_node.index)])
             except Exception as e:
                 print(e)
-    g.vs["label"] = g.vs["name"]
+    g.vs["label"] = names_in_string
     print(len(ids_in_string))
-    layout = g.layout("kk")
-    plot(g, "social_network.png", margin=0)  # сохраняем картинку графа
+    # layout = g.layout("kk")
+    plot(g, "social_network.png", bbox=(1920,1080), margin=10)  # сохраняем картинку графа
     # plot(g, layout=layout, margin=10)
 
 
+# noinspection PyBroadException
 def main():
     api = initialisation()
     my_friends = get_friends(api, researched_id)
@@ -128,26 +146,26 @@ def main():
         my_friends["count"] / 20)  # ходим в апи пачками по 20 человек, чтобы в случае ошибки не было больно
     my_friends = my_friends["items"]
     print(couples_of_friends)
-    mutural_list = {}  # словарь [юзер]:[общий друг1, общий друг2 ...]
+    mutual_list = {}  # словарь [юзер]:[общий друг1, общий друг2 ...]
     for i in range(couples_of_friends + 1):
         sleep(0.25)
-        slice = my_friends[i * 20:(i + 1) * 20]
+        slice_20 = my_friends[i * 20:(i + 1) * 20]
         try:  # идем за информацией о пачке юзеров в апи, если ошибка не венулась, аве нам
-            mutural = api.friends.getMutual(source_uid=researched_id, target_uids=slice)
+            mutual = api.friends.getMutual(source_uid=researched_id, target_uids=slice_20)
             print("ok " + str(i))
-            for friend in mutural:
-                mutural_list[friend["id"]] = friend["common_friends"]
+            for friend in mutual:
+                mutual_list[friend["id"]] = friend["common_friends"]
         except:  # если вернулась ошибка, то идем в апи за каждым юзером в отдельности
             print("error API " + str(i))
-            for k in range(len(slice)):
+            for k in range(len(slice_20)):
                 try:
                     sleep(0.4)
-                    mutural = api.friends.getMutual(source_uid=researched_id, target_uids=slice[k])
-                    for friend in mutural:
-                        mutural_list[friend["id"]] = friend["common_friends"]
+                    mutual = api.friends.getMutual(source_uid=researched_id, target_uids=slice_20[k])
+                    for friend in mutual:
+                        mutual_list[friend["id"]] = friend["common_friends"]
                 except:
-                    print("error " + str(slice[k]))
-    friends_clusterising(mutural_list)
+                    print("error " + str(slice_20[k]))
+    friends_clusterising(mutual_list)
 
 
 main()
