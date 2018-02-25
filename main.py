@@ -84,7 +84,9 @@ def friends_clusterising(mutural_list):
 
 # 27012093 53523636
 # noinspection PyBroadException
-def plot_graf(friends_common):
+def plot_graf(friends_common, name, common):
+    if common:
+        print("COMMON!")
     friends_ids = []
     cluster_color = []
     friends_color = []
@@ -96,39 +98,46 @@ def plot_graf(friends_common):
     cluster_num += 1
     print(cluster_num)
     for cluster in range(cluster_num):  # присваеваем каждому кластеру рандомный цвет
-        cluster_color.append(str(randint(0, 255)) + ", " + str(randint(0, 255)) + ", " + str(randint(0, 255)))
+        cluster_color.append(str(randint(100, 255)) + ", " + str(randint(100, 255)) + ", " + str(randint(100, 255)))
     for friend in friends_common:  # передаем каждому юзеру цвет его кластера
         friend[3] = cluster_color[friend[2]]
         friends_color.append(cluster_color[friend[2]])
-    friends_color.append("255, 255, 255")
+    if common:
+        friends_color.append("255, 255, 255")
 
     for friend in friends_common:
         friends_ids.append(friend[0])
     api = initialisation()
-    friend_names = api.users.get(user_ids=friends_ids)
     sleep(0.4)
-    researched_name = api.users.get(user_ids=str(researched_id))[0]["last_name"]
-    print(friend_names)
+    friend_names = api.users.get(user_ids=friends_ids)
+    if common:
+        sleep(0.4)
+        researched_name = api.users.get(user_ids=str(researched_id))[0]["last_name"]
 
     ids_in_string = []
     names_in_string = []
     g = Graph()
     nodes_col = len(friends_common)
-    g.add_vertices(nodes_col + 1)  # +1 для самого пользователя
+    if common:
+        g.add_vertices(nodes_col + 1)
+    else:
+        g.add_vertices(nodes_col)  # +1 для самого пользователя
     friend_num = 0
     for friend in friends_common:
-        print(friend_num)
         names_in_string.append(friend_names[friend_num]["last_name"])
         ids_in_string.append(str(friend[0]))
         friend_num += 1
-    ids_in_string.append(str(researched_id))
-    names_in_string.append(researched_name)
+    if common:
+        ids_in_string.append(str(researched_id))
+        names_in_string.append(researched_name)
     g.vs["name"] = ids_in_string  # называем вершины графа айдишниками юзеров
     g.vs["color"] = friends_color  # красим вершины в соответствии с кластером юзера
-    user_index = g.vs.find(str(researched_id)).index
+    if common:
+        user_index = g.vs.find(str(researched_id)).index
     for friend in friends_common:  # строим связи между вершинами
         friend_node = g.vs.find(str(friend[0]))
-        g.add_edges([(friend_node.index, user_index)])  # связываем юзера с исследуемым пользователем
+        if common:
+            g.add_edges([(friend_node.index, user_index)])  # связываем юзера с исследуемым пользователем
         for common_friend in friend[4]:  # связываем каждого юзера с общими друзьями
             try:
                 common_friend_node = g.vs.find(str(common_friend))
@@ -138,12 +147,20 @@ def plot_graf(friends_common):
                 except:  # если не добавляли, то добавляем
                     g.add_edges([(friend_node.index, common_friend_node.index)])
             except Exception as e:
-                print(e)
+                e
     g.vs["label"] = names_in_string
-    print(len(ids_in_string))
-    # layout = g.layout("kk")
-    plot(g, "social_network.png", bbox=(1200, 1000), margin=10)  # сохраняем картинку графа
-    # plot(g, layout=layout, margin=10)
+    g.vs["label.color"] = ("255,0,0")*len(names_in_string)
+    print("ids_in_string: " + str(len(ids_in_string)))
+    plot(
+        g,
+        "social_network_" + name + ".png",
+        bbox=(1500, 1200),
+        margin=20,
+        vertex_label_color="black",
+        edge_width=0.1,
+        vertex_label_size=14,
+        vertex_label_font=2
+    )  # сохраняем картинку графа
 
 
 def get_mutural_list(friends_list, api):
@@ -172,14 +189,36 @@ def get_mutural_list(friends_list, api):
     return mutual_list
 
 
+def plot_subclusters(clustered_friends_common):
+    subcluster_friends_common = []
+    cluster_num = 0
+    i = 0
+    friend_col = len(clustered_friends_common)
+    clustered_friends_common.sort(key=lambda friends_sorter: friends_sorter[2])
+    while i < friend_col - 1:
+        while clustered_friends_common[i][2] == cluster_num:
+            subcluster_friends_common.append(clustered_friends_common[i])
+            i += 1
+            if i >= friend_col:
+                break
+        if subcluster_friends_common:
+            print("----")
+            print("subcluster len: " + str(len(subcluster_friends_common)))
+            plot_graf(subcluster_friends_common, str(cluster_num), False)
+            print("cluster num: " + str(cluster_num))
+        cluster_num += 1
+        subcluster_friends_common = []
+
+
 # noinspection PyBroadException
 def main():
     api = initialisation()
     my_friends = get_friends(api, researched_id)
     print(my_friends["count"])
-#    mutural_list = get_mutural_list(my_friends, api)
+    # mutual_list = get_mutual_list(my_friends, api)
     clustered_friends_common = friends_clusterising(m_list)
-    plot_graf(clustered_friends_common)
+    plot_subclusters(clustered_friends_common)
+    plot_graf(clustered_friends_common, "all", True)
 
 
 main()
