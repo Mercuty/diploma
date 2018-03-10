@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import sys
 from random import randint
 from time import sleep
 
@@ -9,8 +8,8 @@ from igraph import Graph, plot
 
 from tok import *
 
-reload(sys)
-sys.setdefaultencoding("utf-8")
+# reload(sys)
+# sys.setdefaultencoding("utf-8")
 
 # researched_id = 22846933
 researched_id = 53523636
@@ -89,7 +88,7 @@ def friends_clusterising(mutural_list):
 
 # 27012093 53523636
 # noinspection PyBroadException
-def plot_graf(friends_common, name, common):
+def make_graf(friends_common, common):
 	if common:
 		print("COMMON!")
 	friends_ids = []
@@ -155,6 +154,70 @@ def plot_graf(friends_common, name, common):
 				e
 	g.vs["label"] = names_in_string
 	g.vs["label.color"] = ("255,0,0") * len(names_in_string)
+	if not common:
+		print("------")
+		print(cluster_num)
+		i = 0
+		informative_friends = []
+		opposite_informative_friends = []
+		for i in range(len(g.vs)):
+			if friend_information[i] == '+':
+				informative_friends.append(i)
+			if friend_information[i] == '-':
+				opposite_informative_friends.append(i)
+		print(informative_friends)
+		print(opposite_informative_friends)
+		print()
+		print(g.vs["label"])
+		print("CHECKING +:")
+		is_ok_for_inf = is_subcluster_informative(g, informative_friends)
+		print("CHECKING -:")
+		is_ok_for_opposite = is_subcluster_informative(g, opposite_informative_friends)
+		if (is_ok_for_inf == 2) & (is_ok_for_opposite == 0):
+			print("++++++ IT IS PLUS ++++++")
+		elif (is_ok_for_opposite == 2) & (is_ok_for_inf <= 1):
+			print("------ IT IS MINUS -----")
+		else:
+			print("????? IT IS COMPLICATED ?????")
+	return g
+
+
+def is_subcluster_informative(g, cluster_to_check):
+	is_informative_cluster = 2
+	if (len(cluster_to_check) / len(g.vs)) < 0.15:
+		print("not trully informative " + str(len(cluster_to_check) / len(g.vs)))
+		is_informative_cluster -= 1
+	if len(cluster_to_check) <= 1:
+		print("not enougth information in cluster " + str(len(cluster_to_check) / len(g.vs)))
+		is_informative_cluster -= 1
+	else:
+		shortest_paths = g.shortest_paths(cluster_to_check)
+		diameter = g.diameter()
+		print(diameter)
+		min_dist_to_informative = [99999] * len(g.vs)
+		for row in shortest_paths:
+			for k in range(len(row)):
+				if row[k] < min_dist_to_informative[k]:
+					min_dist_to_informative[k] = row[k]
+		for dist in min_dist_to_informative:
+			if (dist > diameter - 1) | (diameter == 1):
+				print("can't say anything")
+				print(min_dist_to_informative)
+				is_informative_cluster -= 1
+				break
+	if is_informative_cluster == 2:
+		print("TRULLY INFORMATIVE!")
+		print(min_dist_to_informative)
+		return 2
+	else:
+		if is_informative_cluster == 1:
+			print("SEVERELLY INFORMATIVE CLUSTER")
+			return 1
+		else:
+			return 0
+
+
+def plot_graph(g, name):
 	plot(
 		g,
 		"social_network_" + name + ".png",
@@ -206,7 +269,8 @@ def plot_subclusters(clustered_friends_common):
 			if i >= friend_col:
 				break
 		if subcluster_friends_common:
-			plot_graf(subcluster_friends_common, str(cluster_num), False)
+			graph = make_graf(subcluster_friends_common, False)
+			plot_graph(graph, str(cluster_num))
 		cluster_num += 1
 		subcluster_friends_common = []
 
@@ -219,10 +283,18 @@ def get_friend_information(api, friends_ids):
 	for friend in friend_information:
 		if "bdate" in friend_information[friend_num]:
 			if friend["bdate"].rfind(".") != -1:
-				info.append(
-					friend["bdate"][friend["bdate"].rfind(".") + 3:])
+				birth_year = friend["bdate"][friend["bdate"].rfind(".") + 3:]
+				if birth_year in ["93", "94", "95", "96"]:
+					info.append("+")
+				else:
+					if len(birth_year) == 2:
+						info.append("-")
+					else:
+						info.append("")
+			else:
+				info.append("")
 		else:
-			info.append("");
+			info.append("")
 		friend_num += 1
 	return info
 
@@ -235,7 +307,8 @@ def main():
 	# mutual_list = get_mutual_list(my_friends, api)
 	clustered_friends_common = friends_clusterising(m_list)
 	plot_subclusters(clustered_friends_common)
-	plot_graf(clustered_friends_common, "all", True)
+	graph = make_graf(clustered_friends_common, True)
+	plot_graph(graph, "all")
 
 
 main()
