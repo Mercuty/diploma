@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
+import sys
 from random import randint
 from time import sleep
 
 import numpy as np
 import vk
 from igraph import Graph, plot
+from transliterate import translit
 
 from tok import *
 
-# reload(sys)
-# sys.setdefaultencoding("utf-8")
+reload(sys)
+sys.setdefaultencoding("utf-8")
 
 # researched_id = 22846933
 researched_id = 53523636
@@ -79,7 +81,7 @@ def friends_clusterising(mutural_list):
 								cluster_col[friend_1[2]] += 1
 			for cluster_c in range(cluster_num):
 				if (cluster_col[cluster_c] != 0) & (cluster_col[cluster] != 0) & (cluster != cluster_c):
-					if cluster_col[cluster_c] / cluster_col[cluster] > 1:
+					if cluster_col[cluster_c] / float(cluster_col[cluster]) > 1:
 						for k in range(len(friends_common)):
 							if friends_common[k][2] == cluster_c:
 								friends_common[k][2] = cluster
@@ -116,6 +118,11 @@ def make_graf(friends_common, common):
 	if common:
 		sleep(0.4)
 		researched_name = api.users.get(user_ids=str(researched_id))[0]["last_name"]
+		try:
+			researched_name = translit(researched_name, reversed=True)
+		except:
+			researched_name = researched_name
+			print(researched_name)
 
 	ids_in_string = []
 	names_in_string = []
@@ -128,7 +135,12 @@ def make_graf(friends_common, common):
 	friend_num = 0
 	friend_information = get_friend_information(api, friends_ids)
 	for friend in friends_common:
-		names_in_string.append(friend_info[friend_num]["last_name"] + ' ' + friend_information[friend_num])
+		try:
+			name = translit(friend_info[friend_num]["last_name"], reversed=True)
+		except:
+			name = friend_info[friend_num]["last_name"]
+			print(name)
+		names_in_string.append(name + ' ' + friend_information[friend_num])
 		ids_in_string.append(str(friend[0]))
 		friend_num += 1
 	if common:
@@ -184,8 +196,9 @@ def make_graf(friends_common, common):
 
 def is_subcluster_informative(g, cluster_to_check):
 	is_informative_cluster = 2
-	if (len(cluster_to_check) / len(g.vs)) < 0.15:
-		print("not trully informative " + str(len(cluster_to_check) / len(g.vs)))
+	if (len(cluster_to_check) / float(len(g.vs))) < 0.15:
+		print("not trully informative " + str(len(cluster_to_check) / float(len(g.vs))) + " " + str(
+			len(cluster_to_check)) + " " + str(len(g.vs)))
 		is_informative_cluster -= 1
 	if len(cluster_to_check) <= 1:
 		print("not enougth information in cluster " + str(len(cluster_to_check) / len(g.vs)))
@@ -218,19 +231,20 @@ def is_subcluster_informative(g, cluster_to_check):
 
 
 def plot_graph(g, name):
+	g.write_pickle("pickle/social_network_" + name + ".pkl")
 	plot(
 		g,
 		"social_network_" + name + ".png",
 		bbox=(1000, 1000),
-		margin=100,
+		margin=50,
 		vertex_label_color="black",
-		edge_width=0.1,
+		edge_width=1,
 		vertex_label_size=14,
-		vertex_label_font=2
+		vertex_label_font=2,
 	)  # сохраняем картинку графа
 
 
-def get_mutural_list(friends_list, api):
+def get_mutual_list(friends_list, api):
 	couples_of_friends = int(friends_list["count"] / 20)
 	my_friends = friends_list["items"]
 	print(couples_of_friends)
@@ -284,7 +298,7 @@ def get_friend_information(api, friends_ids):
 		if "bdate" in friend_information[friend_num]:
 			if friend["bdate"].rfind(".") != -1:
 				birth_year = friend["bdate"][friend["bdate"].rfind(".") + 3:]
-				if birth_year in ["93", "94", "95", "96"]:
+				if birth_year in ["93", "94", "95", "96", "97"]:
 					info.append("+")
 				else:
 					if len(birth_year) == 2:
