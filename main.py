@@ -4,6 +4,7 @@ from random import randint
 from time import sleep
 
 import numpy as np
+import copy
 import vk
 from igraph import Graph, plot
 from transliterate import translit
@@ -14,7 +15,12 @@ reload(sys)
 sys.setdefaultencoding("utf-8")
 
 # researched_id = 22846933
+# researched_id = 76811584
 researched_id = 53523636
+trully_ok = ['35658885', '50603938', '38356055', '69912060', '88992371', '8570085']
+trully_ok_1 = ['21784814', '19213465', '76811584', '26842036', '18203202', '5672837', '25127421', '8411995', '58477597',
+	'5456158', '25080159', '227266917', '155792884', '11745223', '7626111', '12014691', '55207397', '16859667',
+	'62779992', '19180129', '3579620', '35658885', '50603938', '38356055', '69912060', '88992371', '8570085']
 
 
 # researched_id = 13221877
@@ -27,8 +33,27 @@ def initialisation():  # инициализация для вк апи
 
 
 def get_friends(api, userid):
-	user_friends = api.friends.get(user_id=userid)
+	user_friends_all = api.friends.get(user_id=userid, fields="deactivated")
+	user_friends = copy.deepcopy(user_friends_all)
+	print(len(user_friends_all["items"]))
+	for user in user_friends_all["items"]:
+		if "deactivated" in user:
+			user_friends["items"].remove(user)
+	print(user_friends["items"])
+	print("-")
+	print(user_friends_all["items"])
+	print(len(user_friends["items"]))
+	user_friends["count"]=len(user_friends["items"])
+
 	return user_friends
+
+
+def get_info_self(api, id):
+	sleep(0.25)
+	researched_year = api.users.get(user_ids=id, fields="bdate")
+	print(researched_year[0]["bdate"])
+	researched_year = int(researched_year[0]["bdate"][researched_year[0]["bdate"].rfind(".") + 3:])
+	return researched_year
 
 
 def friends_clusterising(mutural_list):
@@ -56,7 +81,7 @@ def friends_clusterising(mutural_list):
 					if (friends_common[j][0] == common_friend) & (friends_common[j][2] == ''):
 						friends_common[j][2] = cluster_num
 			cluster_num += 1
-	for i in range(mutural_list_col):  # калибруем кластера
+	for k in range(mutural_list_col):  # калибруем кластера
 		for friend in friends_common:
 			common_friends_clusters = np.zeros(cluster_num)
 			people_in_cluster = np.zeros(cluster_num)
@@ -70,7 +95,7 @@ def friends_clusterising(mutural_list):
 				if people_in_cluster[iter_num] != 0:
 					common_friends_clusters[iter_num] /= people_in_cluster[iter_num]
 			friend[2] = common_friends_clusters.argmax()
-	for i in range(mutural_list_col // 10):  # схлопываем недокластеры
+	for k in range(mutural_list_col // 10):  # схлопываем недокластеры
 		for cluster in range(cluster_num):
 			cluster_col = [0] * cluster_num
 			for friend in friends_common:  # считаем количество друзей друга в разных кластерах
@@ -90,7 +115,7 @@ def friends_clusterising(mutural_list):
 
 # 27012093 53523636
 # noinspection PyBroadException
-def make_graf(friends_common, common):
+def make_graf(friends_common, common, self_year):
 	if common:
 		print("COMMON!")
 	friends_ids = []
@@ -112,8 +137,7 @@ def make_graf(friends_common, common):
 
 	for friend in friends_common:
 		friends_ids.append(friend[0])
-	api = initialisation()
-	sleep(0.4)
+	sleep(0.25)
 	friend_info = api.users.get(user_ids=friends_ids, fields="last_name")
 	if common:
 		sleep(0.4)
@@ -133,11 +157,14 @@ def make_graf(friends_common, common):
 	else:
 		g.add_vertices(nodes_col)  # +1 для самого пользователя
 	friend_num = 0
-	friend_information = get_friend_information(api, friends_ids)
+	friend_information = get_friend_information(api, friends_ids, self_year)
+	print(len(friend_info))
+	print(friend_info)
 	for friend in friends_common:
 		try:
 			name = translit(friend_info[friend_num]["last_name"], reversed=True)
 		except:
+			print(friend_num)
 			name = friend_info[friend_num]["last_name"]
 			print(name)
 		names_in_string.append(name + ' ' + friend_information[friend_num])
@@ -182,16 +209,32 @@ def make_graf(friends_common, common):
 		print()
 		print(g.vs["label"])
 		print("CHECKING +:")
+		diameter, min_dist_to_informative = calc_diameter_and_dist(g, informative_friends)
 		is_ok_for_inf = is_subcluster_informative(g, informative_friends)
+		check_if_trully_ok(g, diameter, max(min_dist_to_informative), is_ok_for_inf)
 		print("CHECKING -:")
 		is_ok_for_opposite = is_subcluster_informative(g, opposite_informative_friends)
 		if (is_ok_for_inf == 2) & (is_ok_for_opposite == 0):
 			print("++++++ IT IS PLUS ++++++")
+			for friend in informative_friends:
+				informative_friends_with_year.append(g.vs["name"][int(friend)])
 		elif (is_ok_for_opposite == 2) & (is_ok_for_inf <= 1):
 			print("------ IT IS MINUS -----")
 		else:
 			print("????? IT IS COMPLICATED ?????")
 	return g
+
+
+def calc_diameter_and_dist(g,cluster_to_check):
+	shortest_paths = g.shortest_paths(cluster_to_check)
+	diameter = g.diameter()
+	print(diameter)
+	min_dist_to_informative = [99999] * len(g.vs)
+	for row in shortest_paths:
+		for k in range(len(row)):
+			if row[k] < min_dist_to_informative[k]:
+				min_dist_to_informative[k] = row[k]
+	return diameter, min_dist_to_informative
 
 
 def is_subcluster_informative(g, cluster_to_check):
@@ -204,14 +247,7 @@ def is_subcluster_informative(g, cluster_to_check):
 		print("not enougth information in cluster " + str(len(cluster_to_check) / len(g.vs)))
 		is_informative_cluster -= 1
 	else:
-		shortest_paths = g.shortest_paths(cluster_to_check)
-		diameter = g.diameter()
-		print(diameter)
-		min_dist_to_informative = [99999] * len(g.vs)
-		for row in shortest_paths:
-			for k in range(len(row)):
-				if row[k] < min_dist_to_informative[k]:
-					min_dist_to_informative[k] = row[k]
+		diameter, min_dist_to_informative = calc_diameter_and_dist(g, cluster_to_check)
 		for dist in min_dist_to_informative:
 			if (dist > diameter - 1) | (diameter == 1):
 				print("can't say anything")
@@ -231,46 +267,46 @@ def is_subcluster_informative(g, cluster_to_check):
 
 
 def plot_graph(g, name):
-	g.write_pickle("pickle/social_network_" + name + ".pkl")
+	# g.write_pickle("pickle/social_network_" + name + ".pkl")
 	plot(
 		g,
-		"social_network_" + name + ".png",
+		"graphs/social_network_" + name + ".png",
 		bbox=(1000, 1000),
 		margin=50,
 		vertex_label_color="black",
 		edge_width=1,
 		vertex_label_size=14,
-		vertex_label_font=2,
+		vertex_label_font=2
 	)  # сохраняем картинку графа
 
 
 def get_mutual_list(friends_list, api):
-	couples_of_friends = int(friends_list["count"] / 20)
-	my_friends = friends_list["items"]
+	couples_of_friends = int(friends_list["count"] / 50)
+	my_friends = map(lambda x: x["id"],friends_list["items"])
 	print(couples_of_friends)
 	mutual_list = {}  # словарь [юзер]:[общий друг1, общий друг2 ...]
 	for i in range(couples_of_friends + 1):
 		sleep(0.25)
-		slice_20 = my_friends[i * 20:(i + 1) * 20]
+		slice_50 = my_friends[i * 50:(i + 1) * 50]
 		try:  # идем за информацией о пачке юзеров в апи, если ошибка не венулась, аве нам
-			mutual = api.friends.getMutual(source_uid=researched_id, target_uids=slice_20)
+			mutual = api.friends.getMutual(source_uid=researched_id, target_uids=slice_50)
 			print("ok " + str(i))
 			for friend in mutual:
 				mutual_list[friend["id"]] = friend["common_friends"]
 		except:  # если вернулась ошибка, то идем в апи за каждым юзером в отдельности
 			print("error API " + str(i))
-			for k in range(len(slice_20)):
+			for k in range(len(slice_50)):
 				try:
 					sleep(0.4)
-					mutual = api.friends.getMutual(source_uid=researched_id, target_uids=slice_20[k])
+					mutual = api.friends.getMutual(source_uid=researched_id, target_uids=slice_50[k])
 					for friend in mutual:
 						mutual_list[friend["id"]] = friend["common_friends"]
 				except:
-					print("error " + str(slice_20[k]))
+					print("error " + str(slice_50[k]))
 	return mutual_list
 
 
-def plot_subclusters(clustered_friends_common):
+def plot_subclusters(clustered_friends_common, self_year):
 	subcluster_friends_common = []
 	cluster_num = 0
 	i = 0
@@ -283,22 +319,25 @@ def plot_subclusters(clustered_friends_common):
 			if i >= friend_col:
 				break
 		if subcluster_friends_common:
-			graph = make_graf(subcluster_friends_common, False)
-			plot_graph(graph, str(cluster_num))
+			graph = make_graf(subcluster_friends_common, False, self_year)
+		# plot_graph(graph, str(cluster_num))
 		cluster_num += 1
 		subcluster_friends_common = []
 
 
-def get_friend_information(api, friends_ids):
-	sleep(0.25)
+def get_friend_information(api, friends_ids, self_year):
+	sleep(0.5)
 	friend_information = api.users.get(user_ids=friends_ids, fields="bdate")
+	researched_year = self_year
+	years_threshold = [str(researched_year - 2), str(researched_year - 1), str(researched_year),
+		str(researched_year + 1), str(researched_year + 2)]
 	info = []
 	friend_num = 0
 	for friend in friend_information:
 		if "bdate" in friend_information[friend_num]:
 			if friend["bdate"].rfind(".") != -1:
 				birth_year = friend["bdate"][friend["bdate"].rfind(".") + 3:]
-				if birth_year in ["93", "94", "95", "96", "97"]:
+				if birth_year in years_threshold:
 					info.append("+")
 				else:
 					if len(birth_year) == 2:
@@ -313,16 +352,48 @@ def get_friend_information(api, friends_ids):
 	return info
 
 
+def check_if_trully_ok(g, diameter, dist, is_ok_inf):
+	is_ok = 0
+	for name in g.vs["name"]:
+		if name in trully_ok:
+			is_ok = 1
+	if is_ok or is_ok_inf==2:
+		dist_diameter_array_for_ok.append(str(diameter) + ' ' + str(dist))
+		graphs_for_ok.append(g.vs["label"])
+	else:
+		dist_diameter_array_for_not_ok.append(str(diameter) + ' ' + str(dist))
+		graphs_for_not_ok.append(g.vs["label"])
+
+
 # noinspection PyBroadException
-def main():
-	api = initialisation()
+
+
+api = initialisation()
+self_year = get_info_self(api, researched_id)
+informative_friends_with_year = []
+dist_diameter_array_for_ok = []
+graphs_for_ok = []
+dist_diameter_array_for_not_ok = []
+graphs_for_not_ok = []
+
+
+
+for researched_id in trully_ok:
+	print("==============================================================")
+	print(researched_id)
+	self_year = get_info_self(api, researched_id)
 	my_friends = get_friends(api, researched_id)
 	print(my_friends["count"])
-	# mutual_list = get_mutual_list(my_friends, api)
-	clustered_friends_common = friends_clusterising(m_list)
-	plot_subclusters(clustered_friends_common)
-	graph = make_graf(clustered_friends_common, True)
-	plot_graph(graph, "all")
+	mutual_list = get_mutual_list(my_friends, api)
+	clustered_friends_common = friends_clusterising(mutual_list)
+	plot_subclusters(clustered_friends_common, self_year)
+	graph = make_graf(clustered_friends_common, True, self_year)
+	# graph = load("pickle/social_network_all.pkl", format="pickle")
+	# plot_graph(graph, "all")
+	print(informative_friends_with_year)
+	print(dist_diameter_array_for_ok)
+	print(graphs_for_ok)
+	print(dist_diameter_array_for_not_ok)
+	print(graphs_for_not_ok)
 
 
-main()

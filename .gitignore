@@ -9,6 +9,6 @@ out
 gen
 *.png
 .idea/inspectionProfiles/
-social_network.png
+social_network*.png
 *.whl
 *test*
