@@ -17,10 +17,10 @@ sys.setdefaultencoding("utf-8")
 # researched_id = 22846933
 # researched_id = 76811584
 researched_id = 53523636
-trully_ok = ['35658885', '50603938', '38356055', '69912060', '88992371', '8570085']
+trully_ok = ['53523636']
 trully_ok_1 = ['21784814', '19213465', '76811584', '26842036', '18203202', '5672837', '25127421', '8411995', '58477597',
 	'5456158', '25080159', '227266917', '155792884', '11745223', '7626111', '12014691', '55207397', '16859667',
-	'62779992', '19180129', '3579620', '35658885', '50603938', '38356055', '69912060', '88992371', '8570085']
+	'62779992', '19180129', '35658885', '50603938', '38356055', '69912060', '88992371', '8570085']
 
 
 # researched_id = 13221877
@@ -35,14 +35,9 @@ def initialisation():  # инициализация для вк апи
 def get_friends(api, userid):
 	user_friends_all = api.friends.get(user_id=userid, fields="deactivated")
 	user_friends = copy.deepcopy(user_friends_all)
-	print(len(user_friends_all["items"]))
 	for user in user_friends_all["items"]:
 		if "deactivated" in user:
 			user_friends["items"].remove(user)
-	print(user_friends["items"])
-	print("-")
-	print(user_friends_all["items"])
-	print(len(user_friends["items"]))
 	user_friends["count"]=len(user_friends["items"])
 
 	return user_friends
@@ -146,7 +141,6 @@ def make_graf(friends_common, common, self_year):
 			researched_name = translit(researched_name, reversed=True)
 		except:
 			researched_name = researched_name
-			print(researched_name)
 
 	ids_in_string = []
 	names_in_string = []
@@ -206,13 +200,10 @@ def make_graf(friends_common, common, self_year):
 				opposite_informative_friends.append(i)
 		print(informative_friends)
 		print(opposite_informative_friends)
-		print()
 		print(g.vs["label"])
-		print("CHECKING +:")
 		diameter, min_dist_to_informative = calc_diameter_and_dist(g, informative_friends)
 		is_ok_for_inf = is_subcluster_informative(g, informative_friends)
 		check_if_trully_ok(g, diameter, max(min_dist_to_informative), is_ok_for_inf)
-		print("CHECKING -:")
 		is_ok_for_opposite = is_subcluster_informative(g, opposite_informative_friends)
 		if (is_ok_for_inf == 2) & (is_ok_for_opposite == 0):
 			print("++++++ IT IS PLUS ++++++")
@@ -228,12 +219,13 @@ def make_graf(friends_common, common, self_year):
 def calc_diameter_and_dist(g,cluster_to_check):
 	shortest_paths = g.shortest_paths(cluster_to_check)
 	diameter = g.diameter()
-	print(diameter)
-	min_dist_to_informative = [99999] * len(g.vs)
+	print("diameter: "+str(diameter))
+	min_dist_to_informative = [9] * len(g.vs)
 	for row in shortest_paths:
 		for k in range(len(row)):
 			if row[k] < min_dist_to_informative[k]:
 				min_dist_to_informative[k] = row[k]
+	print("min dist " + str(min_dist_to_informative))
 	return diameter, min_dist_to_informative
 
 
@@ -249,14 +241,13 @@ def is_subcluster_informative(g, cluster_to_check):
 	else:
 		diameter, min_dist_to_informative = calc_diameter_and_dist(g, cluster_to_check)
 		for dist in min_dist_to_informative:
-			if (dist > diameter - 1) | (diameter == 1):
-				print("can't say anything")
-				print(min_dist_to_informative)
-				is_informative_cluster -= 1
-				break
+			if diameter != 0:
+				if ((diameter - dist)/float(diameter) <= 0.5 ):
+					print("can't say anything "+str((diameter - dist)/float(diameter)))
+					is_informative_cluster -= 1
+					break
 	if is_informative_cluster == 2:
 		print("TRULLY INFORMATIVE!")
-		print(min_dist_to_informative)
 		return 2
 	else:
 		if is_informative_cluster == 1:
@@ -290,7 +281,6 @@ def get_mutual_list(friends_list, api):
 		slice_50 = my_friends[i * 50:(i + 1) * 50]
 		try:  # идем за информацией о пачке юзеров в апи, если ошибка не венулась, аве нам
 			mutual = api.friends.getMutual(source_uid=researched_id, target_uids=slice_50)
-			print("ok " + str(i))
 			for friend in mutual:
 				mutual_list[friend["id"]] = friend["common_friends"]
 		except:  # если вернулась ошибка, то идем в апи за каждым юзером в отдельности
@@ -361,8 +351,9 @@ def check_if_trully_ok(g, diameter, dist, is_ok_inf):
 		dist_diameter_array_for_ok.append(str(diameter) + ' ' + str(dist))
 		graphs_for_ok.append(g.vs["label"])
 	else:
-		dist_diameter_array_for_not_ok.append(str(diameter) + ' ' + str(dist))
-		graphs_for_not_ok.append(g.vs["label"])
+		if (dist) != 9:
+			dist_diameter_array_for_not_ok.append(str(diameter) + ' ' + str(dist))
+			graphs_for_not_ok.append(g.vs["label"])
 
 
 # noinspection PyBroadException
